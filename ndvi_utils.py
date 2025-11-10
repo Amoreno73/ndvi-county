@@ -3,9 +3,28 @@ import config
 import time
 from datetime import datetime, timedelta
 from pytz import timezone
+import geemap
 
 ee.Authenticate()
 ee.Initialize(project='gee-nvdi-county')
+
+### convert to dataframe ### 
+
+def convert_to_df(asset_id_path):
+  '''
+  Convert given Google Earth Asset (path) to Pandas dataframe.\n
+  FeatureCollection -> DataFrame
+  '''
+
+  fc = ee.FeatureCollection(asset_id_path)
+  df = geemap.ee_to_df(fc)
+
+  return df
+
+### convert to csv ###
+
+
+####### adding custom bands to images #######
 
 # Helper functions: NDVI per-pixel calculation, adding bands, combining NDVI data
 
@@ -38,6 +57,8 @@ def add_date_band(image):
   date = ee.Date(image.get('system:time_start'))
   return image.set('date_string', date.format('YYYY-MM-dd'))
 
+####### end of adding custom bands #######
+
 # This function gets all NDVI data at once for the average NDVI per county calculation.
 def combine_ndvis_sats(start_date, end_date, county_geom):
   '''
@@ -59,6 +80,9 @@ def combine_ndvis_sats(start_date, end_date, county_geom):
   combined_ndvi = lndst8.merge(lndst9).merge(stl2). \
   map(lambda img: img.select('NDVI').copyProperties(img))
   return combined_ndvi
+
+
+# below is the main function that performs the county wise NDVI calculations
 
 def get_daily_NDVI_illinois_counties(asset_id=config.ASSET_ID_NDVI, custom_date="today"):
   '''
@@ -86,7 +110,7 @@ def get_daily_NDVI_illinois_counties(asset_id=config.ASSET_ID_NDVI, custom_date=
   else:
     try:
       parsed_date = datetime.strptime(custom_date, "%Y-%m-%d")
-      start_date = parsed_date - timedelta(days=1)
+      start_date = parsed_date - timedelta(days=7)
       end_date = parsed_date
     except:
       print("custom_date is not formatted correctly!\nFormat should follow 'YYYY-MM-DD'")
@@ -121,6 +145,18 @@ def get_daily_NDVI_illinois_counties(asset_id=config.ASSET_ID_NDVI, custom_date=
           maxPixels=1e9
       )
 
+      # new change -> for each county, return total area (square mi. of NDVI > 0.6)
+      bool_ndvi_threshold = img.select('NDVI').gt(0.6)
+
+      ndvi_threshold = bool_ndvi_threshold.reduceRegion(
+          reducer=ee.Reducer.sum(),
+          geometry=county.geometry(),
+          scale=30,
+          maxPixels=1e9
+      )
+      high_ndvi_pixels = ee.Number(ndvi_threshold.get('NDVI'))
+      high_ndvi_area_km2 = high_ndvi_pixels.multiply(900).divide(1e6)
+
       # use county centroid as geometry
       # then finally create ee.Feature for each county on each date
       return ee.Feature(county.geometry().centroid(), {
@@ -129,9 +165,9 @@ def get_daily_NDVI_illinois_counties(asset_id=config.ASSET_ID_NDVI, custom_date=
           'county_fips': county.get('GEOID'),
           'county_name': county.get('NAME'),
           'date_string': date_str,
-          'NDVI': mean_result.get('NDVI')
+          'NDVI': mean_result.get('NDVI'),
+          'high_ndvi_area_km2': high_ndvi_area_km2
       })
-
     return counties.map(county_mean)
 
   per_image_per_county = daily_images.map(create_county_features).flatten()
@@ -146,6 +182,8 @@ def get_daily_NDVI_illinois_counties(asset_id=config.ASSET_ID_NDVI, custom_date=
   print(f"Export started for Asset ID: {asset_id}")
 
   return task
+
+# below is the function that calculates the satellite availability for NDVI calculations
 
 def get_satellite_availability_per_county(asset_id=config.ASSET_ID_SAT, custom_date="today"):
   '''
@@ -167,7 +205,7 @@ def get_satellite_availability_per_county(asset_id=config.ASSET_ID_SAT, custom_d
   else:
     try:
       parsed_date = datetime.strptime(custom_date, "%Y-%m-%d")
-      start_date = parsed_date - timedelta(days=1)
+      start_date = parsed_date - timedelta(days=7)
       end_date = parsed_date
     except:
       print("custom_date is not formatted correctly!\nFormat should follow 'YYYY-MM-DD'")
