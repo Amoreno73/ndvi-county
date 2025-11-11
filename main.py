@@ -3,20 +3,22 @@ import os as os
 from utils import convert_to_df
 from core_functions import get_mean_NDVI_per_unit, get_satellite_availability_per_unit
 
-# Note:
-# once a task finishes on GEE, go back and comment the task generation here
-# then rerun the convert_to_df function since it is finished now.
-# when finished with the csv, comment out the corresponding convert_to_df function
+# Notes:
+# 1. once a task finishes on GEE, go back and comment the task generation here
+# 2. then rerun the convert_to_df function since it is finished now.
+# 3. when finished with the csv, comment out the corresponding convert_to_df function
+# I divided this into four sections for each csv generation
+
 
 ########################
 # CSV GENERATION STATS #
 #                      #
 # NDVI County Done     #
 # NDVI Census Running  #
-# SAT County  Running  #
+# SAT County  Done     #
 # SAT Census  Running  #
 # -------------------- #
-# 1/4 CSV Files Done   #
+# 2/4 CSV Files Done   #
 ########################
 
 ############ GOOGLE EARTH TASKS - ASSET_ID_NDVI_COUNTY ############
