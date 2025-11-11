@@ -127,27 +127,28 @@ def combine_ndvis_sats(start_date, end_date, geometry):
   Note: this handles the fallback to a safe 7-day period if no data was found for the initial date range.\n
   Returns an ee.ImageCollection of all merged NDVI data.
   '''
-  try:
-    lndst8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterDate(start_date, end_date). \
-    filterBounds(geometry).map(addNDVI_lndst8).map(lambda img: tag(img, 'LANDSAT_8')).map(add_date_band)
 
-    lndst9 = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2").filterDate(start_date, end_date). \
-    filterBounds(geometry).map(addNDVI_lndst9).map(lambda img: tag(img, 'LANDSAT_9')).map(add_date_band)
+  lndst8 = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterDate(start_date, end_date). \
+  filterBounds(geometry).map(addNDVI_lndst8).map(lambda img: tag(img, 'LANDSAT_8')).map(add_date_band)
 
-    stl2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterDate(start_date, end_date). \
-    filterBounds(geometry).map(addNDVI_stl2).map(lambda img: tag(img, 'SENTINEL_2')).map(add_date_band)
-    
-    combined_ndvi = lndst8.merge(lndst9).merge(stl2).map(lambda img: img.select('NDVI').copyProperties(img))
+  lndst9 = ee.ImageCollection("LANDSAT/LC09/C02/T1_L2").filterDate(start_date, end_date). \
+  filterBounds(geometry).map(addNDVI_lndst9).map(lambda img: tag(img, 'LANDSAT_9')).map(add_date_band)
 
-    if combined_ndvi.size().getInfo() == 0:
-      #handle this None in the core functions
-      print("No satellite data found for this period, falling back to 7-day period")
-      return None  
-    
-    return combined_ndvi
-  except Exception as e:
-    #handle this None in the core functions
-    return None
+  stl2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterDate(start_date, end_date). \
+  filterBounds(geometry).map(addNDVI_stl2).map(lambda img: tag(img, 'SENTINEL_2')).map(add_date_band)
+
+  combined_ndvi = lndst8.merge(lndst9).merge(stl2).map(lambda img: img.select('NDVI').copyProperties(img, img.propertyNames()))
+  
+  # this is causing API limit to be reached. 
+  # try:
+  #   combined_ndvi.first().getInfo()
+  # except Exception as e:
+  #   print(e)
+  #   print("No satellite data found for this period, falling back to 7-day period")
+  #   return None
+  
+  return combined_ndvi
+
 
 #### daily composites (ndvi composites using combine_ndvis_sats) ####
 
@@ -158,13 +159,14 @@ def create_daily_composite(ndvi_combined, geometry):
     ``geometry`` is the geometry that will be clipped to.\n
     Returns an ee.ImageCollection object of daily composite images. 
     '''
-    def daily_composite(date_str):
+    def daily_composite(date_obj):
+      date_str = ee.String(date_obj)
       filtered = ndvi_combined.filter(ee.Filter.eq("date_string", date_str))
       # calculate mean over all NDVI pixels from satellites (if any available)
       # does this for the current date.
       composite = filtered.mean().rename(['NDVI']).clip(geometry).set('date_string', date_str)
       return composite
-    
+    # bug fix
     dates = ndvi_combined.aggregate_array("date_string").distinct()
     return ee.ImageCollection.fromImages(dates.map(daily_composite))
 

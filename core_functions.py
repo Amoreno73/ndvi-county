@@ -40,7 +40,8 @@ def get_mean_NDVI_per_unit(state_fips, asset_id, custom_date="today", analysis_l
   ndvi_combined = combine_ndvis_sats(start_date, end_date, geometry)
   
   if ndvi_combined is None:
-    # redefine start and end to be the fallback 1 week period
+    # redefine start and end to be the fallback 2 week period
+    print("--FALLBACK LOGIC TRIGGERED--")
     start_date, end_date = parse_date(custom_date, fallback_days=7)
     ndvi_combined = combine_ndvis_sats(start_date, end_date, geometry)
 
@@ -93,19 +94,10 @@ def get_satellite_availability_per_unit(state_fips, asset_id, custom_date="today
 #     start_date, end_date = parse_date(custom_date, fallback_days=7)
 #     ndvi_combined = combine_ndvis_sats(start_date, end_date, geometry)
   
-  print(f"DEBUG: First attempt (1-day) returned: {ndvi_combined}")
-
   if ndvi_combined is None:
-    print(f"⚠ No data found with 1-day lookback. Falling back to 7 days...")
-    start_date_fallback, end_date_fallback = parse_date(custom_date, fallback_days=7)
-    print(f"DEBUG: Fallback dates - Start: {start_date_fallback.getInfo()}, End: {end_date_fallback.getInfo()}")
-
-    ndvi_combined = combine_ndvis_sats(start_date_fallback, end_date_fallback, geometry)
-    print(f"DEBUG: Second attempt (7-day) returned: {ndvi_combined}")
-
-    if ndvi_combined is None:
-      print(f"❌ Still no data even with 7-day fallback. Aborting.")
-      return None
+    # redefine start and end to be the fallback 2 week period
+    start_date, end_date = parse_date(custom_date, fallback_days=7)
+    ndvi_combined = combine_ndvis_sats(start_date, end_date, geometry)
 
   availability_features = get_satellite_availability_helper(ndvi_combined, units)
 
